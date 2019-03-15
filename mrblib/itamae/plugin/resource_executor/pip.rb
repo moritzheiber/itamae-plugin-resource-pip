@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module ::MItamae
   module Plugin
     module ResourceExecutor
@@ -20,21 +22,20 @@ module ::MItamae
 
         private
 
-        def set_current_attributes(current, action)
-          installed = installed_pips.find {|pip| pip[:name] == attributes.package_name }
+        def set_current_attributes(current, _action)
+          installed = installed_pips.find { |pip| pip[:name] == attributes.package_name }
           current.installed = !!installed
-
-          if current.installed
-            version = installed[:version]
-            current.version = version if version != attributes.version
-          end
+          current.version = installed[:version] if current.installed
         end
 
         def installed_pips
           pips = []
-          run_command([*Array(attributes.pip_binary), 'freeze']).stdout.each_line do |line|
+          cmd = [*Array(attributes.pip_binary), 'freeze']
+          cmd << '--user' if attributes.user
+
+          run_command(cmd).stdout.each_line do |line|
             name, version = line.chomp.split(/==/)
-            pips << {name: name, version: version}
+            pips << { name: name, version: version }
           end
           pips
         rescue Backend::CommandExecutionError
@@ -48,36 +49,47 @@ module ::MItamae
           when :uninstall
             desired.installed = false
           end
+
+          desired.version = attributes.version if attributes.version
+          desired.options = prepare_options(attributes.options) if attributes.options
         end
 
-        def build_pip_install_command
-        end
+        def build_pip_install_command; end
 
         def install!
           cmd = [*Array(attributes.pip_binary), 'install']
-          cmd << attributes.options if attributes.options
+          cmd << '--user' if attributes.user
+          cmd << desired.options if desired.options
 
-          if attributes.version
-            cmd << "#{attributes.package_name}==#{attributes.version}"
-          else
-            cmd << attributes.package_name
-          end
+          cmd << if desired.version
+                   "#{attributes.package_name}==#{desired.version}"
+                 else
+                   attributes.package_name
+                 end
 
-          run_command(cmd)
+          run_command(cmd.flatten)
         end
 
         def uninstall!
           cmd = [*Array(attributes.pip_binary), 'uninstall']
-          cmd << attributes.options if attributes.options
+          cmd << desired.options if desired.options
 
-          if attributes.version
-            cmd << "#{attributes.package_name}==#{attributes.version}"
-          else
-            cmd << attributes.package_name
-          end
+          cmd << if desired.version
+                   "#{attributes.package_name}==#{desired.version}"
+                 else
+                   attributes.package_name
+                 end
           cmd << '-y'
 
           run_command(cmd)
+        end
+
+        def prepare_options(options)
+          o = options.split(' ') if options.is_a? String
+          o = ([] << o).flatten
+          o.reject! { |i| i == '--user' }
+          return o unless o.empty?
+          false
         end
       end
     end

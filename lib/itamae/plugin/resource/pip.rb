@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'itamae/resource/base'
 
 module Itamae
@@ -20,7 +22,7 @@ module Itamae
         end
 
         def set_current_attributes
-          installed = installed_pips.find {|pip| pip[:name] == attributes.package_name }
+          installed = installed_pips.find { |pip| pip[:name] == attributes.package_name }
           current.installed = !!installed
 
           if current.installed
@@ -29,7 +31,7 @@ module Itamae
           end
         end
 
-        def action_install(action_options)
+        def action_install(_action_options)
           if current.installed
             if attributes.version && current.version != attributes.version
               install!
@@ -41,13 +43,13 @@ module Itamae
           end
         end
 
-        def action_upgrade(action_options)
+        def action_upgrade(_action_options)
           return if current.installed && attributes.version && attributes.version == current.version
           install!
           updated!
         end
 
-        def action_uninstall(action_options)
+        def action_uninstall(_action_options)
           install!
           updated!
         end
@@ -58,7 +60,7 @@ module Itamae
           pips = []
           run_command([*Array(attributes.pip_binary), 'freeze']).stdout.each_line do |line|
             name, version = line.split(/==/)
-            pips << {name: name, version: version.chomp}
+            pips << { name: name, version: version.chomp }
           end
           pips
         rescue Backend::CommandExecutionError
@@ -69,17 +71,17 @@ module Itamae
           cmd = [*Array(attributes.pip_binary), 'install']
           cmd << attributes.options if attributes.options
 
-          if attributes.version
-            cmd << "#{attributes.package_name}==#{attributes.version}"
-          else
-            cmd << attributes.package_name
-          end
+          cmd << if attributes.version
+                   "#{attributes.package_name}==#{attributes.version}"
+                 else
+                   attributes.package_name
+                 end
 
           case @current_action
           when :upgrade
             cmd << '--upgrade'
           when :uninstall
-            cmd.find {|w| w =~ /\Ainstall\z/ }.sub!(/\A/, 'un')
+            cmd.find { |w| w =~ /\Ainstall\z/ }.sub!(/\A/, 'un')
             cmd << '-y'
           end
 
